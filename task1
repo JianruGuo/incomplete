@@ -1,0 +1,184 @@
+library(mice)
+
+data <- read.csv("winequality-white.csv",sep=";")
+head(data)
+summary(data)
+
+
+set.seed(1)
+x <- data$alcohol
+y <- data$density
+cor(data$alcohol, data$pH)
+n<-length(x)#4898 obs
+length(y)#4898 obs
+
+#check missingness
+sum(is.na(x))
+sum(is.na(y))
+
+#impose MAR missingness to x
+x_obs <-x
+x_obs<-ifelse(y>median(y), NA, x_obs)
+sum(is.na(x_obs))/n
+
+
+
+simdata <- data.frame(y = y, x = x_obs)
+cc_data <- cc(simdata)
+#compare complete-case analysis with complete data (x~y)
+model_complete <- lm(x ~ y)
+summary(model_complete)
+
+model_cc <- lm(x ~ y, data = cc_data)
+summary(model_cc)
+
+cbind(
+  complete = coef(model_complete),
+  complete_case = coef(model_cc)
+)
+par(mfrow=c(2,2))
+plot(model_complete)
+
+par(mfrow=c(2,2))
+plot(model_cc)
+
+#(y~x)
+model_complete_1 <- lm(y ~ x)
+summary(model_complete_1)
+
+model_cc_1 <- lm(y ~ x, data = cc_data)
+summary(model_cc_1)
+
+cbind(
+  complete = coef(model_complete_1),
+  complete_case = coef(model_cc_1)
+)
+par(mfrow=c(2,2))
+plot(model_complete_1)
+
+par(mfrow=c(2,2))
+plot(model_cc_1)
+
+
+#apply stochastic regression imputation to x_obs
+model_imp <- lm(x_obs ~ y)
+x_pred <- predict(model_imp)
+sigma <- summary(model_imp)$sigma
+x_imp <- x_obs
+miss <- is.na(x_obs)
+
+x_imp[miss] <- x_pred[miss] + rnorm(sum(miss),0,sigma)
+data_imp <- data.frame(y = y, x = x_imp)
+
+model_imp_reg <- lm(y ~ x, data = data_imp)
+summary(model_imp_reg)
+
+coef(model_cc_1)
+coef(model_imp_reg)
+
+
+
+
+#simulate 100 times
+#using complete data as benchmark
+
+intercept_complete <- coef(model_complete_1)[1]
+slope_complete <- coef(model_complete_1)[2]
+var_complete <- summary(model_complete_1)$sigma^2
+cor_complete <- cor(x,y)
+
+
+
+
+
+
+
+#for storage
+R <- 100
+intercept_cc <- numeric(R)
+slope_cc <- numeric(R)
+var_cc <- numeric(R)
+cor_cc <- numeric(R)
+
+intercept_sri <- numeric(R)
+slope_sri <- numeric(R)
+var_sri <- numeric(R)
+cor_sri <- numeric(R)
+
+intercept_pmm <- numeric(R)
+slope_pmm <- numeric(R)
+var_pmm <- numeric(R)
+cor_pmm <- numeric(R)
+
+for(i in 1:R){
+  
+  # --- create missing data ---
+  x_obs <- x
+  p <- plogis(3000*(y-mean(y)))
+  miss <- rbinom(n,1,p)
+  x_obs[miss==1] <- NA
+  sum(is.na(x_obs))/n
+  
+  simdata <- data.frame(y=y,x=x_obs)
+  cc_data <- cc(simdata)
+  
+  # --- complete case analysis ---
+  model_cc <- lm(y ~ x, data=cc_data)
+  
+  intercept_cc[i] <- coef(model_cc)[1]
+  slope_cc[i] <- coef(model_cc)[2]
+  var_cc[i] <- summary(model_cc)$sigma^2
+  cor_cc[i] <- cor(cc_data$x,cc_data$y)
+  
+  # --- stochastic regression imputation ---
+  model_imp <- lm(x_obs ~ y)
+  
+  x_pred <- predict(model_imp)
+  sigma <- summary(model_imp)$sigma
+  
+  x_imp <- x_obs
+  miss <- is.na(x_obs)
+  
+  x_imp[miss] <- x_pred[miss] + rnorm(sum(miss),0,sigma)
+  
+  data_imp <- data.frame(y=y,x=x_imp)
+  
+  model_sri <- lm(y ~ x, data=data_imp)
+  
+  intercept_sri[i] <- coef(model_sri)[1]
+  slope_sri[i] <- coef(model_sri)[2]
+  var_sri[i] <- summary(model_sri)$sigma^2
+  cor_sri[i] <- cor(x_imp,y)
+  
+  # --- predictive mean matching ---
+  imps <- mice(simdata, method="pmm", printFlag=FALSE)
+  
+  com1 <- complete(imps,1)
+  
+  model_pmm <- lm(y ~ x, data=com1)
+  
+  intercept_pmm[i] <- coef(model_pmm)[1]
+  slope_pmm[i] <- coef(model_pmm)[2]
+  var_pmm[i] <- summary(model_pmm)$sigma^2
+  cor_pmm[i] <- cor(com1$x,com1$y)
+}
+
+
+
+mean(slope_cc)
+mean(slope_sri)
+mean(slope_pmm)
+
+sd(slope_cc)
+sd(slope_sri)
+sd(slope_pmm)
+
+hist(slope_cc, main="CCA slope estimates")
+abline(v=slope_complete,col="red",lwd=2)
+
+hist(slope_sri, main="SRI slope estimates")
+abline(v=slope_complete,col="red",lwd=2)
+
+hist(slope_pmm, main="PMM slope estimates")
+abline(v=slope_complete,col="red",lwd=2)
+
