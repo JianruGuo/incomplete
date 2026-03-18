@@ -18,7 +18,12 @@ sum(is.na(y))
 
 #impose MAR missingness to x
 x_obs <-x
-x_obs<-ifelse(y>median(y), NA, x_obs)
+
+
+
+p <- plogis(scale(y))   # probability depends on y
+miss <- rbinom(n,1,p)   
+x_obs[miss==1] <- NA
 sum(is.na(x_obs))/n
 
 
@@ -26,10 +31,10 @@ sum(is.na(x_obs))/n
 simdata <- data.frame(y = y, x = x_obs)
 cc_data <- cc(simdata)
 #compare complete-case analysis with complete data (x~y)
-model_complete <- lm(x ~ y)
+model_complete <- lm(x ~ y)#complete data
 summary(model_complete)
 
-model_cc <- lm(x ~ y, data = cc_data)
+model_cc <- lm(x ~ y, data = cc_data)#complete-case
 summary(model_cc)
 
 cbind(
@@ -43,10 +48,10 @@ par(mfrow=c(2,2))
 plot(model_cc)
 
 #(y~x)
-model_complete_1 <- lm(y ~ x)
+model_complete_1 <- lm(y ~ x)#complete
 summary(model_complete_1)
 
-model_cc_1 <- lm(y ~ x, data = cc_data)
+model_cc_1 <- lm(y ~ x, data = cc_data)#complete-case 
 summary(model_cc_1)
 
 cbind(
@@ -62,7 +67,7 @@ plot(model_cc_1)
 
 #apply stochastic regression imputation to x_obs
 model_imp <- lm(x_obs ~ y)
-x_pred <- predict(model_imp)
+x_pred <- predict(model_imp, newdata = data.frame(y = y))
 sigma <- summary(model_imp)$sigma
 x_imp <- x_obs
 miss <- is.na(x_obs)
@@ -112,17 +117,16 @@ cor_pmm <- numeric(R)
 
 for(i in 1:R){
   
-  # --- create missing data ---
+  #create missing data
   x_obs <- x
-  p <- plogis(3000*(y-mean(y)))
+  p <- plogis(scale(y))
   miss <- rbinom(n,1,p)
   x_obs[miss==1] <- NA
-  sum(is.na(x_obs))/n
   
   simdata <- data.frame(y=y,x=x_obs)
   cc_data <- cc(simdata)
   
-  # --- complete case analysis ---
+  #complete case analysis
   model_cc <- lm(y ~ x, data=cc_data)
   
   intercept_cc[i] <- coef(model_cc)[1]
@@ -133,7 +137,7 @@ for(i in 1:R){
   # --- stochastic regression imputation ---
   model_imp <- lm(x_obs ~ y)
   
-  x_pred <- predict(model_imp)
+  x_pred <- predict(model_imp, newdata = data.frame(y = y))
   sigma <- summary(model_imp)$sigma
   
   x_imp <- x_obs
@@ -164,21 +168,66 @@ for(i in 1:R){
 }
 
 
+summary_table <- rbind(
+  complete = c(intercept_complete, slope_complete, var_complete, cor_complete),
+  cca = c(mean(intercept_cc), mean(slope_cc), mean(var_cc), mean(cor_cc)),
+  sri = c(mean(intercept_sri), mean(slope_sri), mean(var_sri), mean(cor_sri)),
+  pmm = c(mean(intercept_pmm), mean(slope_pmm), mean(var_pmm), mean(cor_pmm))
+)
 
-mean(slope_cc)
-mean(slope_sri)
-mean(slope_pmm)
+colnames(summary_table) <- c("Intercept","Slope","Variance","Correlation")
 
-sd(slope_cc)
-sd(slope_sri)
-sd(slope_pmm)
+summary_table
 
-hist(slope_cc, main="CCA slope estimates")
-abline(v=slope_complete,col="red",lwd=2)
 
-hist(slope_sri, main="SRI slope estimates")
-abline(v=slope_complete,col="red",lwd=2)
 
-hist(slope_pmm, main="PMM slope estimates")
-abline(v=slope_complete,col="red",lwd=2)
 
+par(mfrow=c(1,3))
+
+hist(intercept_cc, xlim = c(1.007, 1.0145),main="CCA Intercept", xlab="")
+abline(v=intercept_complete, col="red", lwd=2)
+
+hist(intercept_sri, xlim = c(1.010, 1.0145), main="SRI Intercept", xlab="")
+abline(v=intercept_complete, col="red", lwd=2)
+
+hist(intercept_pmm, xlim = c(0.98, 1.015), main="PMM Intercept", xlab="")
+abline(v=intercept_complete, col="red", lwd=2)
+
+
+
+
+
+
+
+hist(slope_cc, xlim=c(-0.002, -0.0015), main="CCA slope estimates")
+abline(v=slope_complete, col="red", lwd=2)
+
+hist(slope_sri, xlim=c(-0.002, -0.0017), main="SRI slope estimates")
+abline(v=slope_complete, col="red", lwd=2)
+
+hist(slope_pmm, xlim=c(-0.002, 0), main="PMM slope estimates")
+abline(v=slope_complete, col="red", lwd=2)
+
+
+
+
+par(mfrow=c(1,3))
+
+hist(var_cc, xlim= c(1e-06, 4e-06) , main="CCA Variance", xlab="")
+abline(v=var_complete, col="red", lwd=2)
+
+hist(var_sri, xlim= c(2e-06, 4e-06), main="SRI Variance", xlab="")
+abline(v=var_complete, col="red", lwd=2)
+
+hist(var_pmm, xlim= c(2e-06, 1e-05), main="PMM Variance", xlab="")
+abline(v=var_complete, col="red", lwd=2)
+
+
+hist(cor_cc, xlim= c(-0.810, -0.76),main="CCA Correlation", xlab="")
+abline(v=cor_complete, col="red", lwd=2)
+
+hist(cor_sri, xlim= c(-0.9, -0.75), main="SRI Correlation", xlab="")
+abline(v=cor_complete, col="red", lwd=2)
+
+hist(cor_pmm, xlim= c(-0.8, -0.1), main="PMM Correlation", xlab="")
+abline(v=cor_complete, col="red", lwd=2)
