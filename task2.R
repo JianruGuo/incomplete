@@ -204,7 +204,30 @@ compare_tab2 <- compare_tab %>%
 print(compare_tab2, n = 28, width = Inf)
 # MI yielded results that were very similar to CC.
 
+# Missingness table
+miss_tab <- data.frame(
+  variable = names(miss_n),
+  n_missing = miss_n,
+  prop_missing = round(miss_prop, 3)
+)
+miss_tab
 
+# Sample sizes
+n_total <- nrow(dat2)
+n_response_obs <- nrow(dat_cc_base)
+n_cc <- nrow(dat_cc)
 
+cat("Total sample size:", n_total, "\n")
+cat("Observed response sample size:", n_response_obs, "\n")
+cat("Complete-case sample size:", n_cc, "\n")
+
+# Check missingness in analysis dataset
+colSums(is.na(dat_mi))
+
+# Key comparison table
+key_compare_tab <- compare_tab2 %>%
+  filter(term %in% c("genderfemale", "age", "educCollege/AA", "waist", "cpm", "mvpa_anyyes"))
+
+key_compare_tab
 
 
